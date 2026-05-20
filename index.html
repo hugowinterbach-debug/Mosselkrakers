@@ -65,6 +65,14 @@
         .list-item:last-child { border-bottom: none; }
         .item-actions { display: flex; gap: 5px; }
         .btn-sm { padding: 4px 8px; font-size: 12px; }
+        
+        /* Layout Grid for Action Tools */
+        .tool-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -84,13 +92,17 @@
         <button class="btn" id="btn-cancel" onclick="resetForm()" style="display:none; background:#cbd5e1;">Cancel</button>
     </div>
 
-    <!-- File Upload -->
+    <!-- Data Management Hub (Upload, Export, Clear) -->
     <div class="card">
         <div style="margin-bottom: 10px;">
-            <label style="font-weight:500; font-size:14px;">Upload Sheet File (Excel CSV / Text):</label>
+            <label style="font-weight:500; font-size:14px;">Upload Master Sheet (Excel CSV / Text):</label>
             <input type="file" id="excel-file" accept=".csv, .txt" onchange="uploadCSV()" style="margin-top:5px; width:100%;">
         </div>
-        <button class="btn btn-danger" onclick="clearAll()" style="width: 100%;">🗑️ Clear All Entries</button>
+        
+        <div class="tool-actions">
+            <button class="btn btn-primary" onclick="downloadCSV()">📥 Download Updated CSV</button>
+            <button class="btn btn-danger" onclick="clearAll()">🗑️ Clear All Entries</button>
+        </div>
     </div>
 
     <!-- Controls -->
@@ -102,7 +114,7 @@
         </select>
     </div>
 
-    <!-- Output -->
+    <!-- Output List -->
     <div class="card" style="padding:0; overflow:hidden;">
         <div class="collapsible-header" onclick="toggleList()">
             <span>Lookup Records (<span id="record-count">0</span>)</span>
@@ -180,7 +192,6 @@
         reader.onload = function(e) {
             try {
                 const text = e.target.result;
-                
                 let delimiter = ",";
                 const lines = text.split(/[\r\n]+/);
                 if (lines.length > 0 && lines[0].includes(";")) {
@@ -222,6 +233,38 @@
             fileInput.value = ""; 
         };
         reader.readAsText(files[0]);
+    }
+
+    // New Data Export Engine
+    function downloadCSV() {
+        if (records.length === 0) {
+            alert("There are no records to download.");
+            return;
+        }
+
+        // Build standard CSV text layout starting with explicit headers
+        let csvContent = "NAME,PIN\r\n";
+        
+        records.forEach(item => {
+            // Safely escape values that contain commas or quotes
+            let cleanName = item.name.replace(/"/g, '""');
+            if (cleanName.includes(",") || cleanName.includes('"')) {
+                cleanName = `"${cleanName}"`;
+            }
+            csvContent += `${cleanName},${item.pin}\r\n`;
+        });
+
+        // Generate downloadeable object link stream
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", "mosselkraker_master_list.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     function saveToStorage() { localStorage.setItem('lookupRecords', JSON.stringify(records)); }
@@ -276,3 +319,4 @@
 </script>
 </body>
 </html>
+
