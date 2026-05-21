@@ -85,7 +85,6 @@
             <button class="btn btn-primary" onclick="verifyUserPIN()">Unlock Application</button>
         </div>
 
-        <!-- Real-time Cloud Sync Feed Indicator -->
         <div id="cloud-status" class="status-msg status-loading">🔄 Fetching master database from GitHub...</div>
     </div>
 
@@ -97,7 +96,7 @@
             <button class="btn" style="background:#cbd5e1; padding:2px 8px; font-size:11px; margin-left:5px;" onclick="lockAppOut()">Logout</button>
         </div>
 
-        <!-- Manual File Upload Override (Optional Use Case) -->
+        <!-- Manual File Upload Override -->
         <div class="card">
             <div style="margin-bottom: 5px;">
                 <label style="font-weight:500; font-size:14px;">Manual Master Sheet Override (Excel CSV):</label>
@@ -126,40 +125,41 @@
 </div>
 
 <script>
-    // Configuration Pointers
     const GITHUB_USERNAME = "hugowinterbach-debug";
     const REPOSITORY_NAME = "mosselkraker-lookup";
     const FILE_NAME = "mosselkraker_master_list.csv";
 
-    // Computed URL string mapping directly to raw github user file streams
     const CLOUD_CSV_URL = `https://githubusercontent.com{GITHUB_USERNAME}/${REPOSITORY_NAME}/main/${FILE_NAME}`;
 
     let records = JSON.parse(localStorage.getItem('mosselkrakerSecureDB')) || [];
     let isCollapsed = false;
 
-    // Background Autonomous Sync Engine (Runs instantly when webpage starts up)
     async function fetchCloudDatabase() {
         const statusDiv = document.getElementById('cloud-status');
         try {
-            // Fetch live CSV dataset straight out of GitHub servers asynchronously
             const response = await fetch(CLOUD_CSV_URL + '?nocache=' + new Date().getTime());
             if (!response.ok) throw new Error("Could not find file on GitHub path.");
             
             const rawText = await response.text();
-            processRawCSVText(rawText);
+            
+            // Check parsing result sanity check
+            const parseSuccess = processRawCSVText(rawText);
+            if (!parseSuccess || records.length === 0) {
+                throw new Error("File formatting parsing error.");
+            }
             
             statusDiv.innerText = `✅ Cloud synced successfully! (${records.length} records ready)`;
             statusDiv.className = "status-msg status-success";
         } catch (err) {
             console.error(err);
-            // Graceful fallback to cached memory if device happens to drop connection/go offline
             if (records.length > 0) {
-                statusDiv.innerText = `⚠️ Cloud offline. Using local device memory. (${records.length} records cached)`;
+                statusDiv.innerText = `⚠️ Cloud mismatch/offline. Using cached storage. (${records.length} records active)`;
                 statusDiv.className = "status-msg";
                 statusDiv.style.color = "#d97706";
             } else {
-                statusDiv.innerText = "❌ Connection failed. No local database provisioning found.";
-                statusDiv.className = "status-msg var(--danger)";
+                statusDiv.innerText = "❌ Connection failed. Check file formatting or GitHub path.";
+                statusDiv.className = "status-msg";
+                statusDiv.style.color = "#dc2626";
             }
         }
     }
@@ -172,7 +172,7 @@
         }
 
         if (records.length === 0) {
-            alert("App registry empty. The background cloud synchronization engine is still loading or blocking connection.");
+            alert("App database empty. The cloud synchronization engine hasn't populated data yet.");
             return;
         }
 
@@ -188,7 +188,6 @@
             return;
         }
 
-        // Access Unlocked
         document.getElementById('current-user-badge').innerText = `Admin: ${foundUser.name}`;
         document.getElementById('login-screen').style.display = "none";
         document.getElementById('app-screen').style.display = "block";
@@ -211,11 +210,17 @@
         fileInput.value = ""; 
     }
 
+    // Improved Parser Supporting Commas, Semicolons, and Tab Spaced text fields
     function processRawCSVText(text) {
+        if (!text || !text.trim()) return false;
+        
         let delimiter = ",";
         const lines = text.split(/[\r\n]+/);
-        if (lines.length > 0 && lines.includes(";")) {
-            delimiter = ";";
+        
+        if (lines.length > 0) {
+            const firstLine = lines[0];
+            if (firstLine.includes("\t")) delimiter = "\t";
+            else if (firstLine.includes(";")) delimiter = ";";
         }
 
         let parsedRecords = [];
@@ -245,14 +250,18 @@
             }
         });
 
-        records = parsedRecords;
-        saveToStorage();
+        if (parsedRecords.length > 0) {
+            records = parsedRecords;
+            saveToStorage();
+            return true;
+        }
+        return false;
     }
 
     function lockAppOut() {
         document.getElementById('app-screen').style.display = "none";
         document.getElementById('login-screen').style.display = "block";
-        fetchCloudDatabase(); // Refresh cloud stream records immediately on lockout cycle
+        fetchCloudDatabase(); 
     }
 
     function saveToStorage() { localStorage.setItem('mosselkrakerSecureDB', JSON.stringify(records)); }
@@ -301,7 +310,6 @@
         });
     }
 
-    // Trigger cloud synchronization check loop instantly on page render start
     fetchCloudDatabase();
 </script>
 </body>
