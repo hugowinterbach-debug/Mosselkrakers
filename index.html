@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mosselkraker Lookup</title>
+    <title>Mosselkraker Cloud Lookup</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -63,124 +63,137 @@
             background: white;
         }
         .list-item:last-child { border-bottom: none; }
-        .item-actions { display: flex; gap: 5px; }
-        .btn-sm { padding: 4px 8px; font-size: 12px; }
         
-        /* Layout Grid for Action Tools */
-        .tool-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
-        }
+        #login-screen { display: block; max-width: 400px; margin: 50px auto; }
+        #app-screen { display: none; }
+        .status-msg { text-align: center; font-size: 12px; margin-top: 10px; font-weight: bold; }
+        .status-success { color: var(--success); }
+        .status-loading { color: var(--primary); }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📋 Mosselkraker Lookup</h2>
 
-    <!-- Add / Edit Form -->
-    <div class="card">
-        <h4 id="form-title" style="margin-top:0; margin-bottom:10px;">Add New Record</h4>
-        <input type="hidden" id="edit-index">
-        <div class="form-group">
-            <input type="text" id="input-name" placeholder="Enter Name">
-            <input type="number" id="input-pin" placeholder="Enter PIN (Integer)">
-        </div>
-        <button class="btn btn-success" id="btn-save" onclick="saveRecord()">Add Record</button>
-        <button class="btn" id="btn-cancel" onclick="resetForm()" style="display:none; background:#cbd5e1;">Cancel</button>
-    </div>
-
-    <!-- Data Management Hub (Upload, Export, Clear) -->
-    <div class="card">
-        <div style="margin-bottom: 10px;">
-            <label style="font-weight:500; font-size:14px;">Upload Master Sheet (Excel CSV / Text):</label>
-            <input type="file" id="excel-file" accept=".csv, .txt" onchange="uploadCSV()" style="margin-top:5px; width:100%;">
-        </div>
+    <!-- 1. SECURE LOCKSCREEN GATEWAY -->
+    <div id="login-screen" class="card">
+        <h3 style="text-align:center; margin-top:0;">🔐 Access Verification</h3>
+        <p style="font-size:13px; color:#64748b; text-align:center;">Enter your assigned PIN. The app updates and verifies your identity via the live cloud database automatically.</p>
         
-        <div class="tool-actions">
-            <button class="btn btn-primary" onclick="downloadCSV()">📥 Download Updated CSV</button>
-            <button class="btn btn-danger" onclick="clearAll()">🗑️ Clear All Entries</button>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <input type="password" id="login-pin" placeholder="Enter PIN Number" inputmode="numeric" onkeydown="if(event.key==='Enter') verifyUserPIN()">
+            <button class="btn btn-primary" onclick="verifyUserPIN()">Unlock Application</button>
         </div>
+
+        <!-- Real-time Cloud Sync Feed Indicator -->
+        <div id="cloud-status" class="status-msg status-loading">🔄 Fetching master database from GitHub...</div>
     </div>
 
-    <!-- Controls -->
-    <div class="controls">
-        <input type="text" id="search-box" placeholder="🔍 Search by name..." oninput="renderList()">
-        <select id="sort-option" onchange="renderList()">
-            <option value="name-az">Sort: Name (A-Z)</option>
-            <option value="pin-asc">Sort: PIN (Ascending)</option>
-        </select>
-    </div>
-
-    <!-- Output List -->
-    <div class="card" style="padding:0; overflow:hidden;">
-        <div class="collapsible-header" onclick="toggleList()">
-            <span>Lookup Records (<span id="record-count">0</span>)</span>
-            <span id="collapse-arrow">▼</span>
+    <!-- 2. FULL APPLICATION ACCESS VIEW -->
+    <div id="app-screen">
+        <h2>📋 Mosselkraker Lookup</h2>
+        <div style="text-align:right; margin-bottom:10px;">
+            <span style="font-size:12px; background:#e2e8f0; padding:4px 8px; border-radius:12px;" id="current-user-badge">User: Admin</span>
+            <button class="btn" style="background:#cbd5e1; padding:2px 8px; font-size:11px; margin-left:5px;" onclick="lockAppOut()">Logout</button>
         </div>
-        <div id="list-container" class="collapsible-content"></div>
+
+        <!-- Manual File Upload Override (Optional Use Case) -->
+        <div class="card">
+            <div style="margin-bottom: 5px;">
+                <label style="font-weight:500; font-size:14px;">Manual Master Sheet Override (Excel CSV):</label>
+                <input type="file" id="excel-file" accept=".csv, .txt" onchange="uploadCSV()" style="margin-top:5px; width:100%;">
+            </div>
+        </div>
+
+        <!-- Search & Sort Controls -->
+        <div class="controls">
+            <input type="text" id="search-box" placeholder="🔍 Search by name..." oninput="renderList()">
+            <select id="sort-option" onchange="renderList()">
+                <option value="name-az">Sort: Name (A-Z)</option>
+                <option value="pin-asc">Sort: PIN (Ascending)</option>
+            </select>
+        </div>
+
+        <!-- Collapsible Results Grid -->
+        <div class="card" style="padding:0; overflow:hidden;">
+            <div class="collapsible-header" onclick="toggleList()">
+                <span>Lookup Records (<span id="record-count">0</span>)</span>
+                <span id="collapse-arrow">▼</span>
+            </div>
+            <div id="list-container" class="collapsible-content"></div>
+        </div>
     </div>
 </div>
 
 <script>
-    let records = JSON.parse(localStorage.getItem('lookupRecords')) || [];
+    // Configuration Pointers
+    const GITHUB_USERNAME = "hugowinterbach-debug";
+    const REPOSITORY_NAME = "mosselkraker-lookup";
+    const FILE_NAME = "mosselkraker_master_list.csv";
+
+    // Computed URL string mapping directly to raw github user file streams
+    const CLOUD_CSV_URL = `https://githubusercontent.com{GITHUB_USERNAME}/${REPOSITORY_NAME}/main/${FILE_NAME}`;
+
+    let records = JSON.parse(localStorage.getItem('mosselkrakerSecureDB')) || [];
     let isCollapsed = false;
 
-    function saveRecord() {
-        const nameInput = document.getElementById('input-name').value.trim();
-        const pinInput = parseInt(document.getElementById('input-pin').value);
-        const editIndex = document.getElementById('edit-index').value;
+    // Background Autonomous Sync Engine (Runs instantly when webpage starts up)
+    async function fetchCloudDatabase() {
+        const statusDiv = document.getElementById('cloud-status');
+        try {
+            // Fetch live CSV dataset straight out of GitHub servers asynchronously
+            const response = await fetch(CLOUD_CSV_URL + '?nocache=' + new Date().getTime());
+            if (!response.ok) throw new Error("Could not find file on GitHub path.");
+            
+            const rawText = await response.text();
+            processRawCSVText(rawText);
+            
+            statusDiv.innerText = `✅ Cloud synced successfully! (${records.length} records ready)`;
+            statusDiv.className = "status-msg status-success";
+        } catch (err) {
+            console.error(err);
+            // Graceful fallback to cached memory if device happens to drop connection/go offline
+            if (records.length > 0) {
+                statusDiv.innerText = `⚠️ Cloud offline. Using local device memory. (${records.length} records cached)`;
+                statusDiv.className = "status-msg";
+                statusDiv.style.color = "#d97706";
+            } else {
+                statusDiv.innerText = "❌ Connection failed. No local database provisioning found.";
+                statusDiv.className = "status-msg var(--danger)";
+            }
+        }
+    }
 
-        if (!nameInput || isNaN(pinInput)) {
-            alert('Please enter a valid Name and an integer PIN.');
+    function verifyUserPIN() {
+        const pinInput = parseInt(document.getElementById('login-pin').value);
+        if (isNaN(pinInput)) {
+            alert("Please enter a numeric PIN code.");
             return;
         }
 
-        const recordData = { name: nameInput, pin: pinInput };
-        if (editIndex === "") {
-            records.push(recordData);
-        } else {
-            records[parseInt(editIndex)] = recordData;
+        if (records.length === 0) {
+            alert("App registry empty. The background cloud synchronization engine is still loading or blocking connection.");
+            return;
         }
-        saveToStorage();
-        resetForm();
+
+        const foundUser = records.find(item => parseInt(item.pin) === pinInput);
+
+        if (!foundUser) {
+            alert("Access Denied: Invalid PIN number.");
+            return;
+        }
+
+        if (String(foundUser.admin).trim().toUpperCase() !== 'Y') {
+            alert("Access Denied: You do not have administrator clearance permissions.");
+            return;
+        }
+
+        // Access Unlocked
+        document.getElementById('current-user-badge').innerText = `Admin: ${foundUser.name}`;
+        document.getElementById('login-screen').style.display = "none";
+        document.getElementById('app-screen').style.display = "block";
+        document.getElementById('login-pin').value = ""; 
         renderList();
-    }
-
-    function editRecord(index) {
-        document.getElementById('form-title').innerText = "Edit Record";
-        document.getElementById('input-name').value = records[index].name;
-        document.getElementById('input-pin').value = records[index].pin;
-        document.getElementById('edit-index').value = index;
-        document.getElementById('btn-save').innerText = "Update Record";
-        document.getElementById('btn-cancel').style.display = "inline-block";
-    }
-
-    function deleteRecord(index) {
-        if(confirm("Delete this record?")) {
-            records.splice(index, 1);
-            saveToStorage();
-            renderList();
-        }
-    }
-
-    function resetForm() {
-        document.getElementById('form-title').innerText = "Add New Record";
-        document.getElementById('input-name').value = "";
-        document.getElementById('input-pin').value = "";
-        document.getElementById('edit-index').value = "";
-        document.getElementById('btn-save').innerText = "Add Record";
-        document.getElementById('btn-cancel').style.display = "none";
-    }
-
-    function clearAll() {
-        if (confirm("Wipe all active entries?")) {
-            records = [];
-            saveToStorage();
-            renderList();
-        }
     }
 
     function uploadCSV() {
@@ -190,84 +203,59 @@
 
         const reader = new FileReader();
         reader.onload = function(e) {
-            try {
-                const text = e.target.result;
-                let delimiter = ",";
-                const lines = text.split(/[\r\n]+/);
-                if (lines.length > 0 && lines[0].includes(";")) {
-                    delimiter = ";";
-                }
-                
-                let addedCount = 0;
-
-                lines.forEach((rowText) => {
-                    if (!rowText.trim()) return;
-
-                    let cells = rowText.split(delimiter).map(cell => 
-                        cell.replace(/^["']|["']$/g, '').trim()
-                    );
-
-                    if (cells.length >= 2) {
-                        const cellName = cells[0];
-                        const cellPinRaw = cells[1];
-
-                        if (cellName.toUpperCase() === "NAME" || cellName.toUpperCase() === "NAME ") return;
-
-                        if (cellName !== "") {
-                            const targetPin = parseInt(cellPinRaw);
-                            records.push({
-                                name: cellName,
-                                pin: isNaN(targetPin) ? 0 : targetPin
-                            });
-                            addedCount++;
-                        }
-                    }
-                });
-
-                saveToStorage();
-                renderList();
-                alert(`Successfully appended ${addedCount} records!`);
-            } catch (err) {
-                alert("Error parsing file structure: " + err.message);
-            }
-            fileInput.value = ""; 
+            processRawCSVText(e.target.result);
+            alert(`Manual override success! ${records.length} records active locally.`);
+            renderList();
         };
-        reader.readAsText(files[0]);
+        reader.readAsText(files);
+        fileInput.value = ""; 
     }
 
-    // New Data Export Engine
-    function downloadCSV() {
-        if (records.length === 0) {
-            alert("There are no records to download.");
-            return;
+    function processRawCSVText(text) {
+        let delimiter = ",";
+        const lines = text.split(/[\r\n]+/);
+        if (lines.length > 0 && lines.includes(";")) {
+            delimiter = ";";
         }
 
-        // Build standard CSV text layout starting with explicit headers
-        let csvContent = "NAME,PIN\r\n";
-        
-        records.forEach(item => {
-            // Safely escape values that contain commas or quotes
-            let cleanName = item.name.replace(/"/g, '""');
-            if (cleanName.includes(",") || cleanName.includes('"')) {
-                cleanName = `"${cleanName}"`;
+        let parsedRecords = [];
+
+        lines.forEach((rowText) => {
+            if (!rowText.trim()) return;
+
+            let cells = rowText.split(delimiter).map(cell => 
+                cell.replace(/^["']|["']$/g, '').trim()
+            );
+
+            if (cells.length >= 2) {
+                const cellName = cells[0];
+                const cellPinRaw = cells[1];
+                const cellAdmin = cells[2] ? cells[2].trim().toUpperCase() : "N";
+
+                if (cellName.toUpperCase() === "NAME" || cellName.toUpperCase() === "NAME ") return;
+
+                if (cellName !== "") {
+                    const targetPin = parseInt(cellPinRaw);
+                    parsedRecords.push({
+                        name: cellName,
+                        pin: isNaN(targetPin) ? 0 : targetPin,
+                        admin: cellAdmin
+                    });
+                }
             }
-            csvContent += `${cleanName},${item.pin}\r\n`;
         });
 
-        // Generate downloadeable object link stream
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        
-        link.setAttribute("href", url);
-        link.setAttribute("download", "mosselkraker_master_list.csv");
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        records = parsedRecords;
+        saveToStorage();
     }
 
-    function saveToStorage() { localStorage.setItem('lookupRecords', JSON.stringify(records)); }
+    function lockAppOut() {
+        document.getElementById('app-screen').style.display = "none";
+        document.getElementById('login-screen').style.display = "block";
+        fetchCloudDatabase(); // Refresh cloud stream records immediately on lockout cycle
+    }
+
+    function saveToStorage() { localStorage.setItem('mosselkrakerSecureDB', JSON.stringify(records)); }
 
     function toggleList() {
         const container = document.getElementById('list-container');
@@ -303,20 +291,18 @@
         processedList.forEach(item => {
             const div = document.createElement('div');
             div.className = 'list-item';
+            const adminTag = item.admin === 'Y' ? ' <span style="font-size:10px; color:var(--primary); font-weight:bold;">[Admin]</span>' : '';
             div.innerHTML = `
                 <div>
-                    <strong>${item.name}</strong> <span style="color:#64748b; margin-left:8px;">(PIN: ${item.pin})</span>
-                </div>
-                <div class="item-actions">
-                    <button class="btn btn-primary btn-sm" onclick="editRecord(${item.originalIndex})">Edit</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteRecord(${item.originalIndex})">Del</button>
+                    <strong>${item.name}</strong>${adminTag} <span style="color:#64748b; margin-left:8px;">(PIN: ${item.pin})</span>
                 </div>
             `;
             listContainer.appendChild(div);
         });
     }
-    renderList();
+
+    // Trigger cloud synchronization check loop instantly on page render start
+    fetchCloudDatabase();
 </script>
 </body>
 </html>
-
