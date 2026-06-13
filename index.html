@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mosselkraker Golf Club - Member PIN Lookup</title>
-
+<button id="theme-toggle">🌙</button>
 <style>
 :root{
     --green:#1b5e20;
@@ -277,7 +277,18 @@ function uploadCSV(){
 
     reader.readAsText(fileInput.files[0]);
 }
+function toggleTheme() {
+    document.body.classList.toggle('dark-mode');
 
+    const isDark =
+        document.body.classList.contains('dark-mode');
+
+    localStorage.setItem('theme',
+        isDark ? 'dark' : 'light');
+
+    document.getElementById('theme-toggle').textContent =
+        isDark ? '☀️' : '🌙';
+}
 function toggleList(){
     const list=document.getElementById('list-container');
     const arrow=document.getElementById('collapse-arrow');
@@ -298,7 +309,12 @@ function renderList(){
     const search=document.getElementById('search-box').value.toLowerCase();
     const sort=document.getElementById('sort-option').value;
     const container=document.getElementById('list-container');
+const savedTheme =
+    localStorage.getItem('theme');
 
+if (savedTheme === 'dark') {
+    document.body.classList.add('dark-mode');
+}
     let filtered=[...records];
 
     if(search){
