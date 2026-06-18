@@ -119,6 +119,15 @@ body.dark-mode{
     color:white;
 }
 
+.upload-filename{
+    display:block;
+    margin-bottom:2px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--muted);
+    overflow-wrap:anywhere;
+}
+
 .btn-primary{background:var(--green);}
 .btn-danger{background:var(--danger);}
 
@@ -267,6 +276,7 @@ input,select{
 <div class="info-bar">
     <div class="info-card">
         <div>
+            <span class="upload-filename">ListforWEB_LookupCSV.csv</span>
             <strong>📅 Last Uploaded</strong><br>
             <span id="last-upload">Never</span>
         </div>
@@ -472,5 +482,3 @@ renderList();
 
 </body>
 </html>
-
-
